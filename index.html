@@ -29,7 +29,20 @@
     </header>
 
     <main class="layout">
-      <section class="card" id="quiz-card">
+      <!-- Экран выбора блока -->
+      <section class="card" id="block-selector">
+        <h2>Қай бөлімнен бастау керек?</h2>
+        <p class="sub">Әр бөлімде 25 сұрақ бар.</p>
+        <div class="block-grid">
+          <button type="button" class="btn block-btn" data-block="0">1-бөлім<br><small>(1–25 сұрақ)</small></button>
+          <button type="button" class="btn block-btn" data-block="1">2-бөлім<br><small>(26–50 сұрақ)</small></button>
+          <button type="button" class="btn block-btn" data-block="2">3-бөлім<br><small>(51–75 сұрақ)</small></button>
+          <button type="button" class="btn block-btn" data-block="3">4-бөлім<br><small>(76–100 сұрақ)</small></button>
+        </div>
+      </section>
+
+      <!-- Тест (один блок) -->
+      <section class="card" id="quiz-card" hidden>
         <div class="progress-row">
           <div class="pill" id="progress-label">0/0 сұрақ</div>
           <div class="pill soft" id="score-pill">Ұпай: 0</div>
@@ -57,6 +70,7 @@
         </div>
       </section>
 
+      <!-- Итоговый экран -->
       <section class="card" id="summary-card" hidden>
         <div class="summary-header">
           <div>
@@ -80,13 +94,14 @@
             <p class="stat-value" id="stat-accuracy">0%</p>
           </div>
         </div>
-        <button type="button" class="btn primary full" id="restart-btn">Қайта бастау</button>
+        <button type="button" class="btn primary full" id="restart-btn">Басқа бөлімді таңдау</button>
       </section>
 
+      <!-- Инструкция -->
       <section class="card info-card">
         <h2>Қалай пайдалану керек</h2>
         <ul class="guide">
-          <li>Төрт нұсқаның бірін таңдаңыз (A, B, C немесе D) </li>
+          <li>Төрт нұсқаның бірін таңдаңыз (A, B, C немесе D)</li>
           <li>Әр жауаптан кейін дұрыс/қате белгіленеді, түсіндірме болса көрсетіледі.</li>
           <li>Прогресс жолағы мен санағыш арқылы жалпы жағдайды бақылаңыз.</li>
           <li>Қараңғы/жарық режимін ауыстырып, өзіңізге ыңғайлы көріністі таңдаңыз.</li>
@@ -98,6 +113,5 @@
 
   <script src="script.js" defer></script>
 </body>
-
 
 </html>
