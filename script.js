@@ -1,5 +1,8 @@
 const els = {
   themeToggle: document.getElementById("theme-toggle"),
+  blockSelector: document.getElementById("block-selector"),
+  quizCard: document.getElementById("quiz-card"),
+  summaryCard: document.getElementById("summary-card"),
   progressLabel: document.getElementById("progress-label"),
   scorePill: document.getElementById("score-pill"),
   progressFill: document.getElementById("progress-fill"),
@@ -11,7 +14,6 @@ const els = {
   explanation: document.getElementById("explanation"),
   submitBtn: document.getElementById("submit-btn"),
   nextBtn: document.getElementById("next-btn"),
-  summaryCard: document.getElementById("summary-card"),
   summaryTitle: document.getElementById("summary-title"),
   summaryScore: document.getElementById("summary-score"),
   summaryDetail: document.getElementById("summary-detail"),
@@ -21,29 +23,40 @@ const els = {
   restartBtn: document.getElementById("restart-btn"),
 };
 
+const BLOCK_SIZE = 25;
+
 const state = {
-  questions: [], // уже отфильтрованные, перемешанные и с 50 шт.
+  allQuestions: [],     // все валидные вопросы (до 100)
+  currentBlock: [],     // текущий блок из 25 вопросов
   index: 0,
   score: 0,
   answered: 0,
   locked: false,
+  selectedBlockIndex: null,
 };
+
+// Добавим кнопки выбора блока
+const blockButtons = document.querySelectorAll(".block-btn");
 
 document.addEventListener("DOMContentLoaded", () => {
   initTheme();
   attachHandlers();
-  loadQuestions();
+
+  // Загружаем ВСЕ вопросы один раз
+  loadAllQuestions();
 });
 
 function attachHandlers() {
   els.themeToggle.addEventListener("click", toggleTheme);
   els.submitBtn.addEventListener("click", handleSubmit);
   els.nextBtn.addEventListener("click", handleNext);
-  els.restartBtn.addEventListener("click", restart);
+  els.restartBtn.addEventListener("click", () => {
+    showBlockSelector();
+  });
 }
 
-// === ЗАГРУЗКА И ПОДГОТОВКА ВОПРОСОВ ===
-async function loadQuestions() {
+// === ЗАГРУЗКА ВСЕХ ВОПРОСОВ ОДИН РАЗ ===
+async function loadAllQuestions() {
   setStatus("Сұрақтар жүктелуде...", "info-muted");
   try {
     const res = await fetch("tzi_questions.csv");
@@ -51,7 +64,6 @@ async function loadQuestions() {
     const text = await res.text();
     const parsed = parseCsv(text);
 
-    // Фильтруем только валидные вопросы
     const validQuestions = parsed.filter(q => {
       const hasOptions = ["A", "B", "C", "D"].every(letter => q[letter] && q[letter].trim() !== "");
       const hasValidAnswer = ["A", "B", "C", "D"].includes((q.Answer || "").trim().toUpperCase());
@@ -60,55 +72,58 @@ async function loadQuestions() {
 
     if (!validQuestions.length) throw new Error("Сұрақтар табылмады");
 
-    // Перемешиваем пул и берём 50
-    const shuffledPool = shuffle([...validQuestions]);
-    const selected = shuffledPool.slice(0, 50);
+    // Ограничиваем до 100 вопросов
+    state.allQuestions = validQuestions.slice(0, 100);
 
-    // Перемешиваем варианты в каждом вопросе
-    state.questions = selected.map(q => shuffleOptions(q));
+    // Активируем кнопки выбора
+    blockButtons.forEach(btn => {
+      btn.disabled = false;
+      btn.addEventListener("click", () => {
+        const blockIndex = parseInt(btn.dataset.block);
+        startBlock(blockIndex);
+      });
+    });
 
-    // Сбрасываем состояние
-    state.index = 0;
-    state.score = 0;
-    state.answered = 0;
-
-    els.summaryCard.hidden = true;
-    els.questionBlock.classList.remove("hidden");
-    setStatus("");
-    renderQuestion();
+    showBlockSelector();
   } catch (err) {
     setStatus(
       `Қате: ${err.message}. Файлды сервер арқылы ашыңыз (мысалы, "python -m http.server").`,
       "bad"
     );
-    els.questionBlock.classList.add("hidden");
+    els.blockSelector.hidden = true;
   }
 }
 
-// === ПЕРЕМЕШИВАНИЕ ВАРИАНТОВ ОТВЕТОВ ===
-function shuffleOptions(question) {
-  const letters = ["A", "B", "C", "D"];
-  const options = letters.map(letter => ({
-    originalLetter: letter,
-    text: question[letter].trim(),
-  }));
+// === ПОКАЗАТЬ ЭКРАН ВЫБОРА ===
+function showBlockSelector() {
+  els.blockSelector.hidden = false;
+  els.quizCard.hidden = true;
+  els.summaryCard.hidden = true;
+}
 
-  const shuffled = shuffle([...options]);
-  const newQuestion = { ...question };
+// === НАЧАТЬ ВЫБРАННЫЙ БЛОК ===
+function startBlock(blockIndex) {
+  const start = blockIndex * BLOCK_SIZE;
+  const end = start + BLOCK_SIZE;
+  const block = state.allQuestions.slice(start, end);
 
-  // Создаём маппинг: старая буква → новая позиция (новая буква)
-  const letterMap = {};
-  shuffled.forEach((opt, idx) => {
-    const newLetter = letters[idx];
-    newQuestion[newLetter] = opt.text;
-    letterMap[opt.originalLetter] = newLetter;
-  });
+  if (block.length === 0) {
+    alert("Бұл бөлімде сұрақтар жоқ.");
+    return;
+  }
 
-  // Обновляем правильный ответ
-  const oldAnswer = question.Answer.trim().toUpperCase();
-  newQuestion.Answer = letterMap[oldAnswer];
+  state.currentBlock = block;
+  state.selectedBlockIndex = blockIndex;
+  state.index = 0;
+  state.score = 0;
+  state.answered = 0;
 
-  return newQuestion;
+  els.blockSelector.hidden = true;
+  els.quizCard.hidden = false;
+  els.summaryCard.hidden = true;
+  els.questionBlock.classList.remove("hidden");
+  setStatus("");
+  renderQuestion();
 }
 
 // === РЕНДЕР ВОПРОСА ===
@@ -121,7 +136,7 @@ function renderQuestion() {
 
   ["A", "B", "C", "D"].forEach(letter => {
     const text = q[letter];
-    if (text === undefined) return; // защита
+    if (text === undefined) return;
     const option = buildOption(letter, text);
     els.optionsForm.appendChild(option);
   });
@@ -173,7 +188,6 @@ function handleSubmit() {
   const correct = (q.Answer || "").trim().toUpperCase();
   const chosen = checked.value;
 
-  // Подсветка
   const options = els.optionsForm.querySelectorAll(".option");
   options.forEach(opt => {
     const val = opt.querySelector("input").value;
@@ -191,7 +205,6 @@ function handleSubmit() {
     els.feedback.classList.add("bad");
   }
 
-  // Пояснение
   const explanation = q.Explanation || "";
   if (explanation.trim()) {
     els.explanation.textContent = `Түсіндірме: ${explanation}`;
@@ -202,7 +215,7 @@ function handleSubmit() {
   els.scorePill.textContent = `Ұпай: ${state.score}`;
   els.submitBtn.disabled = true;
 
-  const isLast = state.index >= state.questions.length - 1;
+  const isLast = state.index >= state.currentBlock.length - 1;
   els.nextBtn.textContent = isLast ? "Нәтижені көру" : "Келесі сұрақ";
   els.nextBtn.disabled = false;
   state.locked = true;
@@ -210,7 +223,7 @@ function handleSubmit() {
 }
 
 function handleNext() {
-  if (state.index >= state.questions.length - 1) {
+  if (state.index >= state.currentBlock.length - 1) {
     showSummary();
     return;
   }
@@ -218,31 +231,28 @@ function handleNext() {
   renderQuestion();
 }
 
+// === ПОКАЗАТЬ ИТОГИ ===
 function showSummary() {
-  els.questionBlock.classList.add("hidden");
+  els.quizCard.hidden = true;
   els.summaryCard.hidden = false;
 
-  const total = state.questions.length;
+  const total = state.currentBlock.length;
   const wrong = total - state.score;
   const accuracy = total ? Math.round((state.score / total) * 100) : 0;
 
-  els.summaryTitle.textContent = "Қорытынды";
+  els.summaryTitle.textContent = "Бөлім аяқталды";
   els.summaryScore.textContent = `${state.score}/${total}`;
-  els.summaryDetail.textContent = "Барлық сұрақтар аяқталды. Қайта бастау үшін төмендегі батырманы басыңыз.";
+  els.summaryDetail.textContent = "Бұл бөлім аяқталды. Басқа бөлімді таңдауға болады.";
   els.statCorrect.textContent = state.score;
   els.statWrong.textContent = wrong;
   els.statAccuracy.textContent = `${accuracy}%`;
 
-  updateProgress(1); // принудительно 100%
-}
-
-function restart() {
-  loadQuestions();
+  updateProgress(1);
 }
 
 // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
 function getCurrent() {
-  return state.questions[state.index];
+  return state.currentBlock[state.index];
 }
 
 function setStatus(message, tone = "") {
@@ -251,20 +261,12 @@ function setStatus(message, tone = "") {
 }
 
 function updateProgress(forcedRatio) {
-  const total = state.questions.length;
+  const total = state.currentBlock.length;
   const current = state.index + 1;
   const ratio = forcedRatio !== undefined ? forcedRatio : total ? current / total : 0;
   els.progressLabel.textContent = `${Math.min(current, total)}/${total} сұрақ`;
   els.progressFill.style.width = `${Math.min(ratio * 100, 100)}%`;
   els.scorePill.textContent = `Ұпай: ${state.score}`;
-}
-
-function shuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
 }
 
 // === ТЕМА ===
@@ -288,7 +290,7 @@ function updateThemeButton(isDark) {
   els.themeToggle.querySelector(".label").textContent = isDark ? "Жарық режимі" : "Қараңғы режим";
 }
 
-// === CSV ===
+// === CSV ПАРСЕР ===
 function parseCsv(text) {
   const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) return [];
@@ -324,6 +326,4 @@ function splitCsvLine(line) {
   }
   out.push(current);
   return out;
-
 }
-
